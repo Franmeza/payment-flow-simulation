@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/franmeza/payment-flow-simulation/cmd/issuer/utils"
+	"github.com/franmeza/payment-flow-simulation/internal/cardutil"
 	"github.com/franmeza/payment-flow-simulation/internal/db"
 	"github.com/franmeza/payment-flow-simulation/internal/models"
 	"github.com/franmeza/payment-flow-simulation/internal/rules"
@@ -58,7 +58,7 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 		return models.AuthResponse{
 			Approved:      false,
 			DeclineReason: "card not found",
-			LastFour:      utils.LastFour(req.CardUID),
+			LastFour:      cardutil.LastFour(req.CardUID),
 			Timestamp:     time.Now(),
 		}
 	}
@@ -81,7 +81,7 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 		return models.AuthResponse{
 			Approved:      false,
 			DeclineReason: "issuer database error",
-			LastFour:      utils.LastFour(req.CardUID),
+			LastFour:      cardutil.LastFour(req.CardUID),
 			Timestamp:     time.Now(),
 		}
 	}
@@ -92,7 +92,7 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 		return models.AuthResponse{
 			Approved:      false,
 			DeclineReason: result.Reason,
-			LastFour:      utils.LastFour(req.CardUID),
+			LastFour:      cardutil.LastFour(req.CardUID),
 			Timestamp:     time.Now(),
 		}
 	}
@@ -103,7 +103,7 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 		return models.AuthResponse{
 			Approved:      false,
 			DeclineReason: "issuer database error",
-			LastFour:      utils.LastFour(req.CardUID),
+			LastFour:      cardutil.LastFour(req.CardUID),
 			Timestamp:     time.Now(),
 		}
 	}
@@ -114,7 +114,7 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 	return models.AuthResponse{
 		Approved:   true,
 		CardHolder: card.CardHolder,
-		LastFour:   utils.LastFour(req.CardUID),
+		LastFour:   cardutil.LastFour(req.CardUID),
 		Timestamp:  time.Now(),
 	}
 }

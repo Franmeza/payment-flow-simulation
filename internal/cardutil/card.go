@@ -1,10 +1,9 @@
-package utils
+package cardutil
 
-// LastFour returns the last 2 bytes of the UID as a display string.
+// LastFour returns the trailing 5 characters of a card UID for display.
 func LastFour(uid string) string {
 	if len(uid) >= 5 {
 		return uid[len(uid)-5:]
 	}
-
 	return uid
 }
