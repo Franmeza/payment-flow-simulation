@@ -118,9 +118,3 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 		Timestamp:  time.Now(),
 	}
 }
-
-// Health returns a lightweight readiness response for monitoring.
-func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("issuer ok"))
-}
