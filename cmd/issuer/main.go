@@ -5,6 +5,7 @@ import (
 
 	"github.com/franmeza/payment-flow-simulation/cmd/issuer/handlers"
 	"github.com/franmeza/payment-flow-simulation/internal/db"
+	"github.com/franmeza/payment-flow-simulation/internal/fraud"
 	"github.com/franmeza/payment-flow-simulation/internal/httputil"
 	"github.com/franmeza/payment-flow-simulation/internal/logger"
 	"go.uber.org/zap"
@@ -15,7 +16,8 @@ func main() {
 	defer logger.Log.Sync()
 
 	database := db.New()
-	issuerHandlers := handlers.New(database)
+	velocity := fraud.NewVelocity()
+	issuerHandlers := handlers.New(database, velocity)
 
 	logger.Log.Info("Issuer service starting", zap.String("port", "8082"))
 	// Register HTTP routes

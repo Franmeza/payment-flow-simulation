@@ -8,6 +8,7 @@ import (
 
 	"github.com/franmeza/payment-flow-simulation/internal/cardutil"
 	"github.com/franmeza/payment-flow-simulation/internal/db"
+	"github.com/franmeza/payment-flow-simulation/internal/fraud"
 	"github.com/franmeza/payment-flow-simulation/internal/logger"
 	"github.com/franmeza/payment-flow-simulation/internal/models"
 	"github.com/franmeza/payment-flow-simulation/internal/rules"
@@ -16,11 +17,12 @@ import (
 
 type Handler struct {
 	database *db.DB
+	velocity *fraud.Velocity
 }
 
 // New builds a Handler with its required dependencies.
-func New(database *db.DB) *Handler {
-	return &Handler{database: database}
+func New(database *db.DB, velocity *fraud.Velocity) *Handler {
+	return &Handler{database: database, velocity: velocity}
 }
 
 // Authorize validates an auth request, delegates business logic, and returns JSON.
@@ -70,14 +72,38 @@ func (h *Handler) processAuth(req models.AuthRequest, log *zap.Logger) models.Au
 		}
 	}
 
-	// Run rules checks
-	result := rules.Check(card, req.Amount)
-
-	// Persist every auth attempt (approved or declined) for auditing.
+	// Resolve the transaction ID early so all decline paths can reference it.
 	transactionID := req.TransactionID
 	if transactionID == "" {
 		transactionID = fmt.Sprintf("TXN-%d", time.Now().UnixNano())
 	}
+
+	// Velocity fraud check: decline if the card fires 3+ transactions within 60 s.
+	if h.velocity.Check(req.CardUID) {
+		log.Warn("Declined: velocity fraud rule triggered",
+			zap.String("card_uid", req.CardUID),
+		)
+		tx := models.Transaction{
+			ID:         transactionID,
+			CardUID:    req.CardUID,
+			MerchantID: req.MerchantID,
+			Amount:     req.Amount,
+			Approved:   false,
+			Reason:     "velocity fraud rule triggered",
+			Timestamp:  time.Now(),
+		}
+		_ = h.database.SaveTransaction(tx)
+		return models.AuthResponse{
+			TransactionID: transactionID,
+			Approved:      false,
+			DeclineReason: "velocity fraud rule triggered",
+			LastFour:      cardutil.LastFour(req.CardUID),
+			Timestamp:     time.Now(),
+		}
+	}
+
+	// Run rules checks
+	result := rules.Check(card, req.Amount)
 
 	tx := models.Transaction{
 		ID:         transactionID,
