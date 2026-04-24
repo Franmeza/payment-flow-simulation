@@ -3,20 +3,15 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"log"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/franmeza/payment-flow-simulation/internal/cardutil"
+	"github.com/franmeza/payment-flow-simulation/internal/logger"
 	"github.com/franmeza/payment-flow-simulation/internal/models"
+	"go.uber.org/zap"
 )
-
-// Simulated merchant database.
-var merchants = map[string]models.Merchant{
-	"M001": {ID: "M001", Name: "Tim Hortons YYC", Status: "active"},
-	"M002": {ID: "M002", Name: "Calgary Co-op", Status: "active"},
-	"M003": {ID: "M003", Name: "Blocked Merchant", Status: "blocked"},
-}
 
 type Handler struct {
 	networkURL string
@@ -48,8 +43,16 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[ACQUIRER] Auth request — merchant: %s card: %s amount: $%.2f",
-		req.MerchantID, req.CardUID, req.Amount)
+	// Acquirer is the source of transaction IDs for this flow.
+	req.TransactionID = fmt.Sprintf("TXN-%d", time.Now().UnixNano())
+
+	log := logger.Log.With(
+		zap.String("transaction_id", req.TransactionID),
+		zap.String("card_uid", req.CardUID),
+		zap.String("merchant_id", req.MerchantID),
+		zap.Float64("amount", req.Amount),
+	)
+	log.Info("Auth request received")
 
 	// Simulate acquirer processing time.
 	time.Sleep(50 * time.Millisecond)
@@ -57,8 +60,9 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	// Validate merchant existence and status before routing.
 	merchant, exists := merchants[req.MerchantID]
 	if !exists {
-		log.Printf("[ACQUIRER] DECLINED — unknown merchant: %s", req.MerchantID)
+		log.Warn("Declined: unknown merchant")
 		writeResponse(w, models.AuthResponse{
+			TransactionID: req.TransactionID,
 			Approved:      false,
 			DeclineReason: "unknown merchant",
 			LastFour:      cardutil.LastFour(req.CardUID),
@@ -68,8 +72,9 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if merchant.Status != "active" {
-		log.Printf("[ACQUIRER] DECLINED — merchant blocked: %s", req.MerchantID)
+		log.Warn("Declined: merchant blocked")
 		writeResponse(w, models.AuthResponse{
+			TransactionID: req.TransactionID,
 			Approved:      false,
 			DeclineReason: "merchant account suspended",
 			LastFour:      cardutil.LastFour(req.CardUID),
@@ -80,12 +85,12 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.forwardToNetwork(req)
 	if err != nil {
-		log.Printf("[ACQUIRER] Failed to reach network router: %v", err)
+		log.Error("Failed to reach network router", zap.Error(err))
 		http.Error(w, "network unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
-	log.Printf("[ACQUIRER] Final response — approved: %v", resp.Approved)
+	log.Info("Final response", zap.Bool("approved", resp.Approved))
 	writeResponse(w, *resp)
 }
 
