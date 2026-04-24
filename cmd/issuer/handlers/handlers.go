@@ -3,14 +3,15 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/franmeza/payment-flow-simulation/internal/cardutil"
 	"github.com/franmeza/payment-flow-simulation/internal/db"
+	"github.com/franmeza/payment-flow-simulation/internal/logger"
 	"github.com/franmeza/payment-flow-simulation/internal/models"
 	"github.com/franmeza/payment-flow-simulation/internal/rules"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
@@ -37,12 +38,17 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[ISSUER] Auth request — card: %s amount: $%.2f", req.CardUID, req.Amount)
+	log := logger.Log.With(
+		zap.String("transaction_id", req.TransactionID),
+		zap.String("card_uid", req.CardUID),
+		zap.Float64("amount", req.Amount),
+	)
+	log.Info("Auth request received")
 
 	// Simulate issuer-side processing latency.
 	time.Sleep(120 * time.Millisecond)
 
-	resp := h.processAuth(req)
+	resp := h.processAuth(req, log)
 
 	// Always return a JSON response payload.
 	w.Header().Set("Content-Type", "application/json")
@@ -50,12 +56,13 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 }
 
 // processAuth applies issuer rules and persists the auth attempt result.
-func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
+func (h *Handler) processAuth(req models.AuthRequest, log *zap.Logger) models.AuthResponse {
 	// Fetch card details needed for validation and balance checks.
 	card, err := h.database.GetCard(req.CardUID)
 	if err != nil {
-		log.Printf("[ISSUER] Unknown card: %s", req.CardUID)
+		log.Warn("Declined: card not found")
 		return models.AuthResponse{
+			TransactionID: req.TransactionID,
 			Approved:      false,
 			DeclineReason: "card not found",
 			LastFour:      cardutil.LastFour(req.CardUID),
@@ -67,8 +74,13 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 	result := rules.Check(card, req.Amount)
 
 	// Persist every auth attempt (approved or declined) for auditing.
+	transactionID := req.TransactionID
+	if transactionID == "" {
+		transactionID = fmt.Sprintf("TXN-%d", time.Now().UnixNano())
+	}
+
 	tx := models.Transaction{
-		ID:         fmt.Sprintf("TXN-%d", time.Now().UnixNano()),
+		ID:         transactionID,
 		CardUID:    req.CardUID,
 		MerchantID: req.MerchantID,
 		Amount:     req.Amount,
@@ -77,8 +89,9 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 		Timestamp:  time.Now(),
 	}
 	if err := h.database.SaveTransaction(tx); err != nil {
-		log.Printf("[ISSUER] failed to save transaction for card %s: %v", req.CardUID, err)
+		log.Error("Failed to save transaction", zap.Error(err))
 		return models.AuthResponse{
+			TransactionID: transactionID,
 			Approved:      false,
 			DeclineReason: "issuer database error",
 			LastFour:      cardutil.LastFour(req.CardUID),
@@ -88,8 +101,9 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 
 	// Return early for declined authorizations after recording the attempt.
 	if !result.Approved {
-		log.Printf("[ISSUER] DECLINED — %s", result.Reason)
+		log.Warn("Declined", zap.String("reason", result.Reason))
 		return models.AuthResponse{
+			TransactionID: transactionID,
 			Approved:      false,
 			DeclineReason: result.Reason,
 			LastFour:      cardutil.LastFour(req.CardUID),
@@ -99,8 +113,9 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 
 	// For approved requests, deduct funds from the card balance.
 	if err := h.database.DeductBalance(req.CardUID, req.Amount); err != nil {
-		log.Printf("[ISSUER] failed to deduct balance for card %s: %v", req.CardUID, err)
+		log.Error("Failed to deduct balance", zap.Error(err))
 		return models.AuthResponse{
+			TransactionID: transactionID,
 			Approved:      false,
 			DeclineReason: "issuer database error",
 			LastFour:      cardutil.LastFour(req.CardUID),
@@ -108,13 +123,17 @@ func (h *Handler) processAuth(req models.AuthRequest) models.AuthResponse {
 		}
 	}
 
-	log.Printf("[ISSUER] APPROVED — %s $%.2f (new balance: $%.2f)",
-		card.CardHolder, req.Amount, card.Balance-req.Amount)
+	log.Info("Approved",
+		zap.String("card_holder", card.CardHolder),
+		zap.Float64("amount", req.Amount),
+		zap.Float64("new_balance", card.Balance-req.Amount),
+	)
 
 	return models.AuthResponse{
-		Approved:   true,
-		CardHolder: card.CardHolder,
-		LastFour:   cardutil.LastFour(req.CardUID),
-		Timestamp:  time.Now(),
+		TransactionID: transactionID,
+		Approved:      true,
+		CardHolder:    card.CardHolder,
+		LastFour:      cardutil.LastFour(req.CardUID),
+		Timestamp:     time.Now(),
 	}
 }
