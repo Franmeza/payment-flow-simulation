@@ -3,11 +3,12 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
 
+	"github.com/franmeza/payment-flow-simulation/internal/logger"
 	"github.com/franmeza/payment-flow-simulation/internal/models"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
@@ -40,19 +41,24 @@ func (h *Handler) Route(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[NETWORK] Routing request — card: %s amount: $%.2f", req.CardUID, req.Amount)
+	log := logger.Log.With(
+		zap.String("transaction_id", req.TransactionID),
+		zap.String("card_uid", req.CardUID),
+		zap.Float64("amount", req.Amount),
+	)
+	log.Info("Routing request to issuer")
 
 	// Simulate network routing latency
 	time.Sleep(80 * time.Millisecond)
 
 	resp, err := h.forwardToIssuer(req)
 	if err != nil {
-		log.Printf("[NETWORK] Failed to reach issuer: %v", err)
+		log.Error("Failed to reach issuer", zap.Error(err))
 		http.Error(w, "issuer unreachable", http.StatusServiceUnavailable)
 		return
 	}
 
-	log.Printf("[NETWORK] Response received — approved: %v", resp.Approved)
+	log.Info("Response received", zap.Bool("approved", resp.Approved))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
