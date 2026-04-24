@@ -8,25 +8,28 @@ import (
 	"time"
 
 	"github.com/franmeza/payment-flow-simulation/internal/cardutil"
+	"github.com/franmeza/payment-flow-simulation/internal/idempotency"
 	"github.com/franmeza/payment-flow-simulation/internal/logger"
 	"github.com/franmeza/payment-flow-simulation/internal/models"
 	"go.uber.org/zap"
 )
 
 type Handler struct {
-	networkURL string
-	client     *http.Client
+	networkURL  string
+	client      *http.Client
+	idempotency *idempotency.Store
 }
 
 // New builds the acquirer handler with routing dependencies.
-func New(networkURL string, client *http.Client) *Handler {
+func New(networkURL string, client *http.Client, idempotency *idempotency.Store) *Handler {
 	if client == nil {
 		client = http.DefaultClient
 	}
 
 	return &Handler{
-		networkURL: networkURL,
-		client:     client,
+		networkURL:  networkURL,
+		client:      client,
+		idempotency: idempotency,
 	}
 }
 
@@ -53,6 +56,19 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		zap.Float64("amount", req.Amount),
 	)
 	log.Info("Auth request received")
+
+	// If the client supplied an idempotency key and we have already processed
+	// an identical request, return the original response without re-charging.
+	if req.IdempotencyKey != "" {
+		if cached, ok := h.idempotency.Get(req.IdempotencyKey); ok {
+			log.Info("Idempotent replay",
+				zap.String("idempotency_key", req.IdempotencyKey),
+			)
+			w.Header().Set("Idempotent-Replayed", "true")
+			writeResponse(w, *cached)
+			return
+		}
+	}
 
 	// Simulate acquirer processing time.
 	time.Sleep(50 * time.Millisecond)
@@ -91,6 +107,12 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info("Final response", zap.Bool("approved", resp.Approved))
+
+	// Cache the response so any retry with the same key gets this result back.
+	if req.IdempotencyKey != "" {
+		h.idempotency.Set(req.IdempotencyKey, *resp)
+	}
+
 	writeResponse(w, *resp)
 }
 

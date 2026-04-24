@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/franmeza/payment-flow-simulation/cmd/acquirer/handlers"
+	"github.com/franmeza/payment-flow-simulation/internal/idempotency"
 	"github.com/franmeza/payment-flow-simulation/internal/httputil"
 	"github.com/franmeza/payment-flow-simulation/internal/logger"
 	"go.uber.org/zap"
@@ -15,7 +16,9 @@ func main() {
 	logger.Init("acquirer")
 	defer logger.Log.Sync()
 
-	acquirerHandlers := handlers.New(networkURL, nil)
+	idempotencyStore := idempotency.NewConn("./idempotency.db")
+	go idempotencyStore.Cleanup()
+	acquirerHandlers := handlers.New(networkURL, nil, idempotencyStore)
 
 	logger.Log.Info("Acquirer service starting", zap.String("port", "8080"))
 
