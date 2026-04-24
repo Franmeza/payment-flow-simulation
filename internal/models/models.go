@@ -19,6 +19,7 @@ type Merchant struct {
 
 // AuthRequest is what the ESP32 terminal sends to the acquirer
 type AuthRequest struct {
+	TransactionID string  `json:"transaction_id"`
 	CardUID    string  `json:"card_uid"`
 	MerchantID string  `json:"merchant_id"`
 	Amount     float64 `json:"amount"`
@@ -26,6 +27,7 @@ type AuthRequest struct {
 
 // AuthResponse is what travels back to the terminal
 type AuthResponse struct {
+	TransactionID string  `json:"transaction_id"`
 	Approved      bool      `json:"approved"`
 	DeclineReason string    `json:"decline_reason,omitempty"`
 	CardHolder    string    `json:"card_holder,omitempty"`
