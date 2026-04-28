@@ -64,7 +64,7 @@ A physical NFC card is tapped on an ESP32 terminal, which triggers a full author
 ## Services
 
 ### Acquirer (port 8080)
-Simulates the merchant's bank. Receives the auth request from the terminal, validates the merchant exists and is active, then forwards the request to the network router. Returns the final approve/decline back to the terminal.
+Simulates the merchant's bank. Receives the auth request from the terminal, validates the merchant exists and is active, then forwards the request to the network router. Returns the final approve/decline back to the terminal. Supports optional idempotency via an `idempotency_key` field — duplicate requests within 24 hours return the cached response with an `Idempotent-Replayed: true` header.
 
 ### Network Router (port 8081)
 Simulates Visa/Mastercard. Routes the request to the correct issuer based on card prefix. Adds a small artificial latency to simulate real network conditions.
@@ -76,25 +76,32 @@ Simulates the cardholder's bank. Holds the card database, checks balance, runs f
 
 ## Fraud Rules (Issuer)
 
-- Blocked card status → decline
-- Insufficient balance → decline
-- Amount > $1,000 → decline (velocity rule)
 - Unknown card UID → decline
+- Blocked or non-active card status → decline
+- Amount ≤ $0 → decline (invalid amount)
+- Amount > $1,000 → decline (transaction limit)
+- Insufficient balance → decline
+- ≥ 3 attempts in 60 seconds (same card) → decline (velocity check)
 
 ---
 
 ## Project Structure
 
 ```
-minihelcim/
+payment-flow-simulation/
 ├── cmd/
 │   ├── acquirer/       # Acquirer service (port 8080)
 │   ├── network/        # Network router (port 8081)
 │   └── issuer/         # Issuer service (port 8082)
 ├── internal/
-│   ├── models/         # Shared structs (Card, Transaction, AuthRequest, AuthResponse)
-│   ├── fraud/          # Fraud rule engine
-│   └── db/             # SQLite card and merchant store
+│   ├── models/         # Shared structs (Card, Merchant, AuthRequest, AuthResponse, Transaction)
+│   ├── db/             # SQLite card store (migrations, seed, CRUD)
+│   ├── rules/          # Authorization rule engine
+│   ├── fraud/          # In-memory velocity tracker (sliding 60s window)
+│   ├── idempotency/    # SQLite idempotency store with 24h expiry
+│   ├── cardutil/       # Card display helpers
+│   ├── httputil/       # Health check handler
+│   └── logger/         # Structured zap logger
 ├── esp32/
 │   └── terminal.ino    # Arduino sketch for the physical terminal
 ├── go.mod
@@ -107,7 +114,7 @@ minihelcim/
 
 ### Prerequisites
 
-- Go 1.22+
+- Go 1.26+
 - Arduino IDE with ESP32 board support
 - Adafruit PN532 library
 - ThingPulse SSD1306Wire library
@@ -134,7 +141,7 @@ Open `esp32/terminal.ino` in Arduino IDE, set your WiFi credentials and acquirer
 ```bash
 curl -X POST http://localhost:8080/authorize \
   -H "Content-Type: application/json" \
-  -d '{"card_uid":"1B:5E:32:07","merchant_id":"M001","amount":24.99}'
+  -d '{"card_uid":"2E:F8:14:07","merchant_id":"M001","amount":24.99}'
 ```
 
 ---
@@ -143,8 +150,19 @@ curl -X POST http://localhost:8080/authorize \
 
 | Card | Holder | Balance | Status |
 |---|---|---|---|
-| 1B:5E:32:07 | Hely Cimer | $500.00 | active |
-| 2E:F8:14:07 | Jane Smith | $23.50 | active |
+| 2E:F8:14:07 | Hely Cimer | $500.00 | active |
+| 1B:5E:32:07 | Jane Smith | $23.50 | active |
+| BLOCKED:01 | Bob Block | $100.00 | blocked |
+
+---
+
+## Simulated Merchants
+
+| Merchant ID | Name | Status |
+|---|---|---|
+| M001 | Tim Hortons YYC | active |
+| M002 | Calgary Co-op | active |
+| M003 | Blocked Merchant | blocked |
 
 ---
 
@@ -153,8 +171,9 @@ curl -X POST http://localhost:8080/authorize \
 | Layer | Technology |
 |---|---|
 | Terminal firmware | C++ (Arduino) |
-| Backend services | Go 1.22 |
-| Database | SQLite |
+| Backend services | Go 1.26 |
+| Database | SQLite (`modernc.org/sqlite`) |
+| Logging | `go.uber.org/zap` |
 | Transport | HTTP/JSON |
 | Hardware | ESP32, PN532, SSD1306 |
 
