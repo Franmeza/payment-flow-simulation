@@ -57,8 +57,8 @@ func (d *DB) seed() {
 	}
 
 	cards := []models.Card{
-		{UID: "1B:5E:32:07", CardHolder: "Hely Cimer", Balance: 500.00, Status: "active"},
-		{UID: "2E:F8:14:07", CardHolder: "Jane Smith", Balance: 23.50, Status: "active"},
+		{UID: "2E:F8:14:07", CardHolder: "Hely Cimer", Balance: 500.00, Status: "active"},
+		{UID: "1B:5E:32:07", CardHolder: "Jane Smith", Balance: 23.50,  Status: "active"},
 		{UID: "BLOCKED:01", CardHolder: "Bob Block", Balance: 100.00, Status: "blocked"},
 	}
 
