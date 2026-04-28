@@ -37,6 +37,10 @@ A physical NFC card is tapped on an ESP32 terminal, which triggers a full author
 
 ---
 
+## Demo
+
+![Payment Flow Simulation Demo](demo.gif)
+
 ## Hardware
 
 | Component | Details |
