@@ -46,6 +46,20 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If the client supplied an idempotency key and we have already processed
+	// an identical request, return the original response without re-charging.
+	if req.IdempotencyKey != "" {
+		if cached, ok := h.idempotency.Get(req.IdempotencyKey); ok {
+			logger.Log.Info("Idempotent replay",
+				zap.String("idempotency_key", req.IdempotencyKey),
+				zap.String("transaction_id", cached.TransactionID), // log the ORIGINAL txn id
+			)
+			w.Header().Set("Idempotent-Replayed", "true")
+			writeResponse(w, *cached)
+			return
+		}
+	}
+
 	// Acquirer is the source of transaction IDs for this flow.
 	req.TransactionID = fmt.Sprintf("TXN-%d", time.Now().UnixNano())
 
@@ -56,20 +70,6 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 		zap.Float64("amount", req.Amount),
 	)
 	log.Info("Auth request received")
-
-	// If the client supplied an idempotency key and we have already processed
-	// an identical request, return the original response without re-charging.
-	if req.IdempotencyKey != "" {
-		if cached, ok := h.idempotency.Get(req.IdempotencyKey); ok {
-			log.Info("Idempotent replay",
-				zap.String("idempotency_key", req.IdempotencyKey),
-			)
-			w.Header().Set("Idempotent-Replayed", "true")
-			writeResponse(w, *cached)
-			return
-		}
-	}
-
 	// Simulate acquirer processing time.
 	time.Sleep(50 * time.Millisecond)
 
