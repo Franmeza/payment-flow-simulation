@@ -2,7 +2,7 @@
 
 A hardware + software simulation of a real card payment flow, built as a portfolio project targeting Helcim's engineering team.
 
-A physical NFC card is tapped on an ESP32 terminal, which triggers a full authorization cycle across three simulated Go services — acquirer, card network router, and issuer — mirroring how real payments work in production.
+A physical NFC card is tapped on an ESP32 terminal, which triggers a full authorization cycle across three simulated Go services: acquirer, card network router, and issuer. Mirroring how real payments work in production.
 
 ---
 
@@ -47,8 +47,8 @@ A physical NFC card is tapped on an ESP32 terminal, which triggers a full author
 |---|---|
 | ESP32 board | With onboard SSD1306 OLED display |
 | PN532 NFC module | POCREATION kit — I2C mode |
-| MIFARE Classic 1K card | UID: 1B:5E:32:07 |
-| MIFARE keyfob | UID: 2E:F8:14:07 |
+| MIFARE Classic 1K card | UID: 2E:F8:14:07|
+| MIFARE keyfob | UID: 1B:5E:32:07 |
 
 **Wiring (I2C):**
 
@@ -160,8 +160,8 @@ curl -X POST http://localhost:8080/authorize \
 
 | Merchant ID | Name | Status |
 |---|---|---|
-| M001 | Tim Hortons YYC | active |
-| M002 | Calgary Co-op | active |
+| M001 | Kingly | active |
+| M002 | Kinjo Sushi and Grill | active |
 | M003 | Blocked Merchant | blocked |
 
 ---
@@ -181,7 +181,7 @@ curl -X POST http://localhost:8080/authorize \
 
 ## Why this project
 
-Helcim builds payment infrastructure in Go for Canadian and US merchants. This project simulates the core of what Helcim does — card present transactions, authorization routing, and merchant services — using the same language and a real physical terminal. It was built to demonstrate both payments domain knowledge and Go backend fundamentals.
+Helcim builds payment infrastructure in Go for Canadian and US merchants. This project simulates the core of what Helcim does: card present transactions, authorization routing, and merchant services — using the same language and a real physical terminal. It was built to demonstrate both payments domain knowledge and Go backend fundamentals.
 
 ---
 
