@@ -1,8 +1,8 @@
-# Simulated Merchant's Payment Terminal
+# Simulated Payment Flow + Merchant Dashboard
 
-A hardware + software simulation of a real card payment flow, built as a portfolio project targeting Helcim's engineering team.
+A hardware + software simulation of a real card payment flow with a merchant-facing dashboard.
 
-A physical NFC card is tapped on an ESP32 terminal, which triggers a full authorization cycle across three simulated Go services: acquirer, card network router, and issuer. Mirroring how real payments work in production.
+A physical NFC card is tapped on an ESP32 terminal, which triggers a full authorization cycle across three simulated Go services: acquirer, card network router, and issuer. A React dashboard visualizes live transaction data and processing-fee metrics from SQLite.
 
 ---
 
@@ -33,6 +33,12 @@ A physical NFC card is tapped on an ESP32 terminal, which triggers a full author
         | HTTP response
         v
 [ESP32 Display — APPROVED / DECLINED]
+
+[React Dashboard (Vite) :5173]
+        |
+        | GET /api/transactions, /api/stats (proxied)
+        v
+[Issuer Service :8082]
 ```
 
 ---
@@ -70,7 +76,19 @@ Simulates the merchant's bank. Receives the auth request from the terminal, vali
 Simulates Visa/Mastercard. Routes the request to the correct issuer based on card prefix. Adds a small artificial latency to simulate real network conditions.
 
 ### Issuer (port 8082)
-Simulates the cardholder's bank. Holds the card database, checks balance, runs fraud rules, and makes the approve/decline decision.
+Simulates the cardholder's bank. Holds the card database, checks balance, runs fraud rules, makes the approve/decline decision, and exposes read-only dashboard endpoints:
+
+- `GET /transactions?limit=100` — recent transaction history
+- `GET /stats` — aggregated transaction metrics
+
+### Dashboard UI (port 5173)
+A React + TypeScript app that displays:
+
+- approval/decline KPIs
+- gross approved volume
+- estimated processing fees (`1.68% + $0.08`)
+- estimated net volume
+- paginated transaction history with mobile-optimized cards
 
 ---
 
@@ -102,9 +120,10 @@ payment-flow-simulation/
 │   ├── cardutil/       # Card display helpers
 │   ├── httputil/       # Health check handler
 │   └── logger/         # Structured zap logger
-├── esp32/
-│   └── terminal.ino    # Arduino sketch for the physical terminal
+├── ui/                 # React merchant dashboard (Vite + TypeScript)
 ├── go.mod
+├── payments.db (not pushed)
+├── idempotency.db (not pushed)
 └── README.md
 ```
 
@@ -115,6 +134,7 @@ payment-flow-simulation/
 ### Prerequisites
 
 - Go 1.26+
+- Node.js 20+ and npm
 - Arduino IDE with ESP32 board support
 - Adafruit PN532 library
 - ThingPulse SSD1306Wire library
@@ -131,6 +151,16 @@ go run ./cmd/network
 # Terminal 3 — Acquirer
 go run ./cmd/acquirer
 ```
+
+### Run the dashboard UI
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+The Vite dev server proxies `/api/*` to the issuer service at `http://localhost:8082`.
 
 ### Flash the ESP32
 
@@ -172,6 +202,8 @@ curl -X POST http://localhost:8080/authorize \
 |---|---|
 | Terminal firmware | C++ (Arduino) |
 | Backend services | Go 1.26 |
+| Frontend dashboard | React 19 + TypeScript + Vite |
+| Data fetching | TanStack Query |
 | Database | SQLite (`modernc.org/sqlite`) |
 | Logging | `go.uber.org/zap` |
 | Transport | HTTP/JSON |
@@ -181,11 +213,11 @@ curl -X POST http://localhost:8080/authorize \
 
 ## Why this project
 
-Helcim builds payment infrastructure in Go for Canadian and US merchants. This project simulates the core of what Helcim does: card present transactions, authorization routing, and merchant services — using the same language and a real physical terminal. It was built to demonstrate both payments domain knowledge and Go backend fundamentals.
+This project simulates end-to-end payment authorization with realistic service boundaries and introduces a merchant-style operations dashboard for analytics. It demonstrates payment domain fundamentals, backend service design in Go, and frontend data visualization with React.
 
 ---
 
 ## Author
 
 Built by Francisco — Calgary, AB  
-Portfolio project targeting Helcim Engineering
+Portfolio project
