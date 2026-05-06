@@ -1,15 +1,11 @@
 import { TransactionStats } from '../types/dashboard'
+import { formatCurrency } from '../lib/utils/formatter'
 
 interface StatsGridProps {
   stats: TransactionStats | null
   processingMarkupTotal: number
   estimatedNetVolume: number
 }
-
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-})
 
 function StatsGrid({ stats, processingMarkupTotal, estimatedNetVolume }: StatsGridProps) {
   if (!stats) {
@@ -40,15 +36,15 @@ function StatsGrid({ stats, processingMarkupTotal, estimatedNetVolume }: StatsGr
       </article>
       <article className="stat-card">
         <p className="stat-label">Gross Volume</p>
-        <p className="stat-value">{currencyFormatter.format(stats.approved_volume)}</p>
+        <p className="stat-value">{formatCurrency(stats.approved_volume)}</p>
       </article>
       <article className="stat-card">
         <p className="stat-label">Est. Fee Total (1.68% + $0.08)</p>
-        <p className="stat-value">{currencyFormatter.format(processingMarkupTotal)}</p>
+        <p className="stat-value">{formatCurrency(processingMarkupTotal)}</p>
       </article>
       <article className="stat-card">
         <p className="stat-label">Est. Net After Markup</p>
-        <p className="stat-value">{currencyFormatter.format(estimatedNetVolume)}</p>
+        <p className="stat-value">{formatCurrency(estimatedNetVolume)}</p>
       </article>
     </section>
   )

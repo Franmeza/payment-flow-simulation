@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { formatCurrency } from '../lib/utils/formatter'
+import MobileTransactionsList from './MobileTransactionsList'
 import { Transaction } from '../types/dashboard'
 
 interface TransactionsTableProps {
@@ -6,11 +8,6 @@ interface TransactionsTableProps {
   processingPercentageFee: number
   processingFixedFee: number
 }
-
-const amountFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-})
 
 const PAGE_SIZE = 10
 
@@ -72,9 +69,9 @@ function TransactionsTable({
                   <td>{new Date(tx.timestamp).toLocaleString()}</td>
                   <td className="mono">{tx.id}</td>
                   <td>{tx.merchant_id}</td>
-                  <td>{amountFormatter.format(tx.amount)}</td>
-                  <td>{tx.approved ? amountFormatter.format(processingMarkup) : '-'}</td>
-                  <td>{tx.approved ? amountFormatter.format(estimatedNet) : '-'}</td>
+                  <td>{formatCurrency(tx.amount)}</td>
+                  <td>{tx.approved ? formatCurrency(processingMarkup) : '-'}</td>
+                  <td>{tx.approved ? formatCurrency(estimatedNet) : '-'}</td>
                   <td>
                     <span className={tx.approved ? 'status success' : 'status error'}>
                       {tx.approved ? 'Approved' : 'Declined'}
@@ -94,6 +91,11 @@ function TransactionsTable({
           </tbody>
         </table>
       </div>
+      <MobileTransactionsList
+        transactions={paginatedTransactions}
+        processingPercentageFee={processingPercentageFee}
+        processingFixedFee={processingFixedFee}
+      />
       <div className="pagination-bar">
         <p className="pagination-meta">
           Page {currentPage} of {totalPages}
