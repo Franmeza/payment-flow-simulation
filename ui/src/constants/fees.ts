@@ -1,0 +1,2 @@
+export const PROCESSING_PERCENTAGE_FEE = 0.0168
+export const PROCESSING_FIXED_FEE = 0.08
