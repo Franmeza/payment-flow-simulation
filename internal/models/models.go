@@ -46,3 +46,14 @@ type Transaction struct {
 	Reason     string    `json:"reason,omitempty"`
 	Timestamp  time.Time `json:"timestamp"`
 }
+
+// TransactionStats is an aggregate view over transaction activity.
+type TransactionStats struct {
+	TotalTransactions int     `json:"total_transactions"`
+	ApprovedCount     int     `json:"approved_count"`
+	DeclinedCount     int     `json:"declined_count"`
+	ApprovalRate      float64 `json:"approval_rate"`
+	TotalVolume       float64 `json:"total_volume"`
+	ApprovedVolume    float64 `json:"approved_volume"`
+	DeclinedVolume    float64 `json:"declined_volume"`
+}
