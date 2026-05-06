@@ -22,6 +22,8 @@ func main() {
 	logger.Log.Info("Issuer service starting", zap.String("port", "8082"))
 	// Register HTTP routes
 	http.HandleFunc("/authorize", issuerHandlers.Authorize)
+	http.HandleFunc("/transactions", issuerHandlers.Transactions)
+	http.HandleFunc("/stats", issuerHandlers.Stats)
 	http.HandleFunc("/health", httputil.HealthHandler("issuer"))
 
 	if err := http.ListenAndServe(":8082", nil); err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/franmeza/payment-flow-simulation/internal/cardutil"
@@ -55,6 +56,50 @@ func (h *Handler) Authorize(w http.ResponseWriter, r *http.Request) {
 	// Always return a JSON response payload.
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// Transactions returns recent issuer-side transaction records from SQLite.
+func (h *Handler) Transactions(w http.ResponseWriter, r *http.Request) {
+	if !allowReadRequest(w, r) {
+		return
+	}
+
+	limit := 100
+	if rawLimit := r.URL.Query().Get("limit"); rawLimit != "" {
+		parsedLimit, err := strconv.Atoi(rawLimit)
+		if err != nil || parsedLimit <= 0 || parsedLimit > 500 {
+			http.Error(w, "invalid limit (must be 1-500)", http.StatusBadRequest)
+			return
+		}
+		limit = parsedLimit
+	}
+
+	transactions, err := h.database.ListTransactions(limit)
+	if err != nil {
+		logger.Log.Error("Failed to load transactions", zap.Error(err))
+		http.Error(w, "failed to load transactions", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(transactions)
+}
+
+// Stats returns aggregate transaction metrics for dashboard visualization.
+func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
+	if !allowReadRequest(w, r) {
+		return
+	}
+
+	stats, err := h.database.GetTransactionStats()
+	if err != nil {
+		logger.Log.Error("Failed to load transaction stats", zap.Error(err))
+		http.Error(w, "failed to load stats", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(stats)
 }
 
 // processAuth applies issuer rules and persists the auth attempt result.
@@ -162,4 +207,22 @@ func (h *Handler) processAuth(req models.AuthRequest, log *zap.Logger) models.Au
 		LastFour:      cardutil.LastFour(req.CardUID),
 		Timestamp:     time.Now(),
 	}
+}
+
+func allowReadRequest(w http.ResponseWriter, r *http.Request) bool {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return false
+	}
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return false
+	}
+
+	return true
 }
