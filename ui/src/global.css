@@ -260,6 +260,31 @@ th {
   padding: 1rem;
 }
 
+.pagination-bar {
+  margin-top: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.pagination-meta {
+  margin: 0;
+  color: var(--gray-600);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.pagination-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pagination-actions .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .error-banner {
   max-width: 1100px;
   margin: 0 auto 1rem;
